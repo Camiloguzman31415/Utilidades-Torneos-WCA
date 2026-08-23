@@ -1,0 +1,29 @@
+﻿# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
+
+# Environment Variables
+.env
+!.env.example
+
+# OS / IDE
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# Large generated PDF outputs and logs (preserve templates)
+Analizador_Rendimiento_WCA/output/
+Analizador_Torneos_WCA/output/
+Creacion de Gafetes/gafetes_final_*.pdf
+Creacion de Medallas/medallas_*.pdf
+SoR WCA/SoR_WCA*.pdf
+SoR WCA/data/

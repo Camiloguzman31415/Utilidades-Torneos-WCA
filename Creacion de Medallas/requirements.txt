@@ -1,0 +1,4 @@
+﻿pillow
+reportlab
+requests
+cairosvg
