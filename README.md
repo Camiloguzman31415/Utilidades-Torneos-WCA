@@ -14,6 +14,7 @@ Colección integral de herramientas, utilidades y scripts automatizados para la 
    - [4. Creación de Medallas](#4--creación-de-medallas)
    - [5. Organizador de Torneos (Hub Web)](#5--organizador-de-torneos-hub-web)
    - [6. Calculadora Sum of Ranks (SoR)](#6--calculadora-sum-of-ranks-sor)
+   - [7. Generador de Fixtures y Torneos (Brackets y Liga)](#7--generador-de-fixtures-y-torneos-brackets-y-liga)
 3. [Requisitos Globales e Instalación](#-requisitos-globales-e-instalación)
 4. [Estructura del Repositorio](#-estructura-del-repositorio)
 5. [Tecnologías Utilizadas](#-tecnologías-utilizadas)
@@ -23,9 +24,9 @@ Colección integral de herramientas, utilidades y scripts automatizados para la 
 
 ## 🎯 Visión General
 
-Organizar y gestionar competencias de cubos de Rubik requiere coordinar múltiples aspectos: desde la planificación de horarios y rondas, hasta la acreditación de competidores, la confección de medallas y el análisis post-torneo. 
+Organizar y gestionar competencias de cubos de Rubik requiere coordinar múltiples aspectos: desde la planificación de horarios y rondas, hasta la acreditación de competidores, la confección de medallas, la gestión de cuadros de eliminación/ligas y el análisis post-torneo. 
 
-Este repositorio reúne **6 módulos especializados** desarrollados para cubrir cada una de estas etapas de forma automatizada y profesional, interactuando directamente con las APIs oficiales de la WCA y WCA Live.
+Este repositorio reúne **7 módulos especializados** desarrollados para cubrir cada una de estas etapas de forma automatizada y profesional, interactuando directamente con las APIs oficiales de la WCA y WCA Live.
 
 ---
 
@@ -100,11 +101,24 @@ Este repositorio reúne **6 módulos especializados** desarrollados para cubrir 
 
 ---
 
+### 7. ⚔️ [Generador de Fixtures y Torneos (Brackets y Liga)](./wca-fixture-generator/)
+- **Ubicación:** `wca-fixture-generator/`
+- **Utilidad:** Aplicación web interactiva *standalone* para emparejamiento, disputa y exportación de cuadros de eliminación directa (*March Madness*) y ligas *round-robin*.
+- **Funcionalidades:**
+  - Importación en tiempo real de competidores desde la API de la WCA por ID de torneo.
+  - Modos **Individual** y **Por Equipos** (de 2 a 4 integrantes con generación aleatoria o manual).
+  - **Eliminación Directa (2 a 64+ competidores):** Distribución balanceada de BYEs y preliminares, partido por el 3.º puesto, avance interactivo con un clic, podio y exportación PDF vectorial.
+  - **Formato Liga (Todos contra Todos):** Generación automática de partidos, tabla de posiciones en vivo con desempates y soporte para torneos masivos.
+  - Sistema de semillas criptográficas (Auto Seed) y deterministas (Manual).
+- **Ejecución:** Abrir `wca-fixture-standalone.html` en el navegador.
+
+---
+
 ## 📦 Requisitos Globales e Instalación
 
 ### Entorno Recomendado
 - **Python 3.8 o superior**
-- **Navegador web moderno** (para el Organizador Web)
+- **Navegador web moderno** (para las herramientas web interactivas)
 
 ### Instalación de Dependencias de Python
 Puedes instalar los paquetes principales utilizados por las herramientas ejecutando:
@@ -155,10 +169,14 @@ Utilidades Torneos WCA/
 │   ├── Organizador de torneos.html
 │   └── README.md
 │
-└── SoR WCA/                           # Calculadora Sum of Ranks (Live y Export)
-    ├── sor_wca_unificado.py
-    ├── requirements.txt
-    ├── .env.example
+├── SoR WCA/                           # Calculadora Sum of Ranks (Live y Export)
+│   ├── sor_wca_unificado.py
+│   ├── requirements.txt
+│   ├── .env.example
+│   └── README.md
+│
+└── wca-fixture-generator/             # Generador de brackets y ligas (Individual/Equipos)
+    ├── wca-fixture-standalone.html
     └── README.md
 ```
 
@@ -167,8 +185,8 @@ Utilidades Torneos WCA/
 ## 💻 Tecnologías Utilizadas
 
 - **Lenguajes:** Python 3, JavaScript (ES6+), HTML5, CSS3.
-- **APIs:** WCA REST API v0, WCA Live GraphQL API.
-- **Librerías de Procesamiento y PDF:** ReportLab, PyMuPDF (fitz), PyPDF2, Pillow, CairoSVG.
+- **APIs:** WCA REST API v0 (WCIF público), WCA Live GraphQL API.
+- **Librerías de Procesamiento y PDF:** ReportLab, PyMuPDF (fitz), PyPDF2, Pillow, CairoSVG, jsPDF, html2pdf.
 - **Ciencia de Datos y Gráficos:** Matplotlib, Pandas, NumPy.
 - **Iconografía y Tipografía:** `@cubing/icons`, Bebas Neue, Space Mono, DM Sans.
 
