@@ -1692,15 +1692,23 @@ Ejemplos de uso:
         elif args.wca:
             use_wca_live = False
         else:
-            # Intentar detectar automaticamente
-            # Si es solo numeros, probablemente es WCA Live
-            # Si tiene letras, probablemente es WCA
+            # Intentar detectar automaticamente:
             if competition_id.isdigit():
                 use_wca_live = True
                 print(f"\n[INFO] Detectado como ID de WCA Live (numerico): {competition_id}")
             else:
-                use_wca_live = False
-                print(f"\n[INFO] Detectado como ID de WCA (alfanumerico): {competition_id}")
+                # Comprobar si tiene datos en la Nueva API Live de WCA
+                try:
+                    r_chk = requests.get(f"{WCA_NEW_LIVE_API_URL}/competitions/{competition_id}/live/rounds", headers={"User-Agent": "utilidades-torneos-wca"}, timeout=5)
+                    if r_chk.ok and r_chk.json().get('rounds'):
+                        use_wca_live = True
+                        print(f"\n[INFO] Detectado en la Nueva API WCA Live: {competition_id}")
+                    else:
+                        use_wca_live = False
+                        print(f"\n[INFO] Detectado como ID de WCA oficial: {competition_id}")
+                except:
+                    use_wca_live = False
+                    print(f"\n[INFO] Detectado como ID de WCA oficial: {competition_id}")
     
     print(f"[ID] Competencia: {competition_id}")
     print()
