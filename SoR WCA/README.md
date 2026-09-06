@@ -1,4 +1,4 @@
-﻿# 🏆 Calculadora Sum of Ranks (SoR) WCA
+# 🏆 Calculadora Sum of Ranks (SoR) WCA
 
 Calculadora unificada en Python para determinar la clasificación **Sum of Ranks (SoR)** de competidores en torneos oficiales de la **World Cube Association (WCA)**.
 
@@ -14,7 +14,7 @@ El **Sum of Ranks (SoR)** es una métrica competitiva integral que evalúa la ve
 
 - **Dos Modos de Operación Unificados:**
   1. **Modo 1 - WCA Export (Competencias Finalizadas):** Consulta los resultados oficiales consolidados a través de la API REST de la WCA.
-  2. **Modo 2 - WCA Live (Competencias en Curso / En Vivo):** Extrae los resultados en tiempo real mediante la API GraphQL de WCA Live.
+  2. **Modo 2 - WCA Live (Competencias en Curso / En Vivo):** Extrae los resultados en tiempo real conectándose automáticamente a la **Nueva API WCA Live** (`/live/rounds`) o a la API GraphQL de **WCA Live clásico** (`live.worldcubeassociation.org`), aceptando tanto WCA IDs alfanuméricos como IDs numéricos.
 - **Cálculo Preciso de Posiciones:** Asigna penalizaciones y rankings normalizados para competidores que no participan en determinados eventos según el reglamento de SoR.
 - **Exportación en Documento PDF Único:**
   - Hoja informativa con el reglamento y sistema de puntuación aplicado.
@@ -49,8 +49,8 @@ pip install reportlab pypdf pandas requests
    ```
 2. Selecciona el modo de consulta:
    - `1`: Competencia finalizada (WCA Export).
-   - `2`: Competencia en progreso (WCA Live).
-3. Introduce el identificador del torneo cuando sea solicitado (ejemplo: `DelacuestaPrs2026` o ID numérico de WCA Live).
+   - `2`: Competencia en progreso (WCA Live: Nueva Live o Live clásico).
+3. Introduce el identificador del torneo cuando sea solicitado (ejemplo: `SouthOmahaScramble2026` o ID numérico `11003`).
 4. El programa generará el archivo PDF consolidado con los resultados del SoR.
 
 ---

@@ -5,6 +5,8 @@ Generador de Informes PDF para torneos de speedcubing
 import sys
 import os
 import argparse
+import warnings
+warnings.filterwarnings("ignore")
 from datetime import datetime, date
 from typing import Dict, Any, Optional, List, Tuple
 from dataclasses import dataclass, field
@@ -289,15 +291,64 @@ class Competition:
 
 # ==================== API CLIENT ====================
 
+WCA_NEW_LIVE_API_URL = "https://www.worldcubeassociation.org/api/v1"
+WCA_API_V0_URL = "https://www.worldcubeassociation.org/api/v0"
+
+def event_id_from_round_id(round_id: str) -> str:
+    import re
+    return re.sub(r'-r\d+$', '', str(round_id))
+
+def round_number_from_id(round_id: str) -> int:
+    import re
+    m = re.search(r'-r(\d+)$', str(round_id))
+    return int(m.group(1)) if m else 1
+
+def round_name_for(total_rounds: int, idx: int) -> str:
+    if total_rounds <= 1 or idx == total_rounds - 1:
+        return 'Final'
+    if total_rounds >= 4 and idx == total_rounds - 2:
+        return 'Semi Final'
+    return f'Round {idx + 1}'
+
 class WCALiveClient:
     def __init__(self, api_url: str = WCA_LIVE_API_URL):
         self.api_url = api_url
         self.session = requests.Session()
         self.session.headers.update({
             'Content-Type': 'application/json',
-            'Accept': 'application/json'
+            'Accept': 'application/json',
+            'User-Agent': 'utilidades-torneos-wca'
         })
     
+    def resolve_wca_live_id(self, input_id: str) -> Optional[str]:
+        """Resuelve el ID numérico de una competencia en WCA Live clásico si se pasa un WCA ID alfanumérico."""
+        if not input_id:
+            return None
+        s_id = str(input_id).strip()
+        if s_id.isdigit():
+            return s_id
+
+        meta = None
+        try:
+            r = self.session.get(f"{WCA_API_V0_URL}/competitions/{s_id}", timeout=15)
+            if r.ok:
+                meta = r.json()
+        except:
+            pass
+
+        name = meta.get('name') if meta else None
+        if name:
+            try:
+                q = 'query($filter: String!) { competitions(filter: $filter) { id name wcaId } }'
+                data = self.execute_query(q, {'filter': name})
+                comps = data.get('competitions', [])
+                for c in comps:
+                    if c.get('wcaId', '').lower() == s_id.lower():
+                        return c.get('id')
+            except:
+                pass
+        return None
+
     def execute_query(self, query: str, variables: Dict[str, Any] = None) -> Dict[str, Any]:
         payload = {'query': query, 'variables': variables or {}}
         try:
@@ -312,6 +363,131 @@ class WCALiveClient:
         except Exception as e:
             raise Exception(f"Error al ejecutar query: {str(e)}")
     
+    def fetch_new_live_competition(self, competition_id: str) -> Optional[Dict[str, Any]]:
+        """Intenta obtener toda la estructura y resultados desde la Nueva API Live de WCA (/live/rounds)."""
+        try:
+            r_rounds = self.session.get(f"{WCA_NEW_LIVE_API_URL}/competitions/{competition_id}/live/rounds", timeout=15)
+            if not r_rounds.ok:
+                return None
+            rounds_json = r_rounds.json()
+            raw_rounds = rounds_json.get('rounds', [])
+            if not raw_rounds:
+                return None
+        except:
+            return None
+
+        meta = {}
+        try:
+            r_meta = self.session.get(f"{WCA_API_V0_URL}/competitions/{competition_id}", timeout=15)
+            if r_meta.ok:
+                meta = r_meta.json()
+        except:
+            pass
+
+        wcif_persons = []
+        try:
+            r_wcif = self.session.get(f"{WCA_API_V0_URL}/competitions/{competition_id}/wcif/public", timeout=15)
+            if r_wcif.ok:
+                wcif_persons = r_wcif.json().get('persons', [])
+        except:
+            pass
+
+        wcif_by_reg = {}
+        wcif_by_user = {}
+        wcif_by_id = {}
+        for p in wcif_persons:
+            w_id = p.get('wcaId')
+            reg_id = p.get('registrantId')
+            u_id = p.get('wcaUserId')
+            country_iso2 = p.get('countryIso2')
+            if reg_id is not None:
+                wcif_by_reg[reg_id] = {'wcaId': w_id, 'countryIso2': country_iso2, 'name': p.get('name')}
+            if u_id is not None:
+                wcif_by_user[u_id] = {'wcaId': w_id, 'countryIso2': country_iso2, 'name': p.get('name')}
+            if p.get('registration') and p.get('registration').get('wcaRegistrationId') is not None:
+                wcif_by_id[p['registration']['wcaRegistrationId']] = {'wcaId': w_id, 'countryIso2': country_iso2, 'name': p.get('name')}
+
+        from collections import defaultdict
+        rounds_by_event = defaultdict(list)
+        for r in raw_rounds:
+            ev = event_id_from_round_id(r['id'])
+            rounds_by_event[ev].append(r)
+
+        all_competitors_map = {}
+        competition_events = []
+
+        for ev, ev_rounds in rounds_by_event.items():
+            ev_rounds_sorted = sorted(ev_rounds, key=lambda x: round_number_from_id(x['id']))
+            comp_event_rounds = []
+            for idx, rnd in enumerate(ev_rounds_sorted):
+                rid = rnd['id']
+                r_det = self.session.get(f"{WCA_NEW_LIVE_API_URL}/competitions/{competition_id}/live/rounds/{rid}", timeout=15)
+                det = r_det.json() if r_det.ok else {}
+
+                comp_by_id = {c['id']: c for c in det.get('competitors', [])}
+                parsed_results = []
+
+                for res in det.get('results', []):
+                    reg_id = res.get('registration_id')
+                    c_info = comp_by_id.get(reg_id, {})
+                    c_reg = c_info.get('registrant_id')
+                    c_user = c_info.get('user_id')
+
+                    mapped = wcif_by_reg.get(c_reg) or wcif_by_user.get(c_user) or wcif_by_id.get(reg_id) or {}
+                    wca_id = mapped.get('wcaId')
+                    c_name = c_info.get('name') or mapped.get('name') or 'Unknown'
+                    country_name = c_info.get('country_iso2') or mapped.get('countryIso2') or 'Unknown'
+
+                    person_key = str(reg_id) if reg_id is not None else str(c_reg)
+                    if person_key not in all_competitors_map:
+                        all_competitors_map[person_key] = {
+                            'id': person_key,
+                            'name': c_name,
+                            'wcaId': wca_id,
+                            'country': {'name': country_name}
+                        }
+
+                    parsed_results.append({
+                        'person': {'id': person_key, 'name': c_name, 'wcaId': wca_id, 'country': {'name': country_name}},
+                        'best': res.get('best', 0),
+                        'average': res.get('average', 0),
+                        'ranking': res.get('global_pos') or res.get('ranking'),
+                        'singleRecordTag': res.get('single_record_tag'),
+                        'averageRecordTag': res.get('average_record_tag'),
+                        'attempts': [{'result': a.get('value', 0)} for a in res.get('attempts', [])]
+                    })
+
+                comp_event_rounds.append({
+                    'id': rid,
+                    'name': round_name_for(len(ev_rounds_sorted), idx),
+                    'number': round_number_from_id(rid),
+                    'results': parsed_results
+                })
+
+            competition_events.append({
+                'id': ev,
+                'event': {'id': ev, 'name': get_event_display_name(ev)},
+                'rounds': comp_event_rounds
+            })
+
+        organizers = [{'name': org.get('name', 'Unknown'), 'wcaId': org.get('wca_id')} for org in meta.get('organizers', [])]
+        delegates = [{'name': delg.get('name', 'Unknown'), 'wcaId': delg.get('wca_id')} for delg in meta.get('delegates', [])]
+
+        return {
+            'competition': {
+                'id': competition_id,
+                'name': meta.get('name', competition_id),
+                'startDate': meta.get('start_date'),
+                'endDate': meta.get('end_date'),
+                'competitorLimit': meta.get('competitor_limit'),
+                'competitors': list(all_competitors_map.values()),
+                'competitionEvents': competition_events,
+                'organizers': organizers,
+                'delegates': delegates,
+                'source': 'NEW_LIVE'
+            }
+        }
+
     def get_competition(self, competition_id: str) -> Dict[str, Any]:
         query = """
         query GetCompetition($id: ID!) {
@@ -335,39 +511,27 @@ class WCALiveClient:
     def get_competition_staff(self, competition_name: str) -> Dict[str, Any]:
         """Obtiene organizadores y delegados usando la API REST de WCA"""
         try:
-            # Generar ID de WCA a partir del nombre del torneo
             wca_competition_id = generate_wca_competition_id(competition_name)
-            
-            # Intentar obtener desde la API REST de WCA
-            rest_url = f"https://worldcubeassociation.org/api/v0/competitions/{wca_competition_id}"
+            rest_url = f"{WCA_API_V0_URL}/competitions/{wca_competition_id}"
             response = self.session.get(rest_url, timeout=30)
             response.raise_for_status()
             data = response.json()
             
-            staff_info = {
-                'organizers': [],
-                'delegates': []
-            }
-            
-            # Extraer organizadores
+            staff_info = {'organizers': [], 'delegates': []}
             if 'organizers' in data:
                 for org in data['organizers']:
                     staff_info['organizers'].append({
                         'name': org.get('name', 'Unknown'),
                         'wcaId': org.get('wca_id')
                     })
-            
-            # Extraer delegados
             if 'delegates' in data:
                 for delg in data['delegates']:
                     staff_info['delegates'].append({
                         'name': delg.get('name', 'Unknown'),
                         'wcaId': delg.get('wca_id')
                     })
-            
             return staff_info
         except Exception as e:
-            # Si falla, retornar estructura vacia
             print(f"Advertencia: No se pudieron obtener datos de staff: {e}")
             return {'organizers': [], 'delegates': []}
     
@@ -393,13 +557,20 @@ class WCALiveClient:
         return self.execute_query(query, {'id': round_id})
     
     def get_competition_with_all_results(self, competition_id: str) -> Dict[str, Any]:
-        competition_data = self.get_competition(competition_id)
+        # 1. Probar Nueva API Live de WCA
+        new_live_data = self.fetch_new_live_competition(competition_id)
+        if new_live_data:
+            return new_live_data
+
+        # 2. Fallback a WCA Live clásico (GraphQL)
+        live_id = self.resolve_wca_live_id(competition_id) or competition_id
+        competition_data = self.get_competition(live_id)
         if not competition_data or 'competition' not in competition_data:
             return competition_data
         
         competition = competition_data['competition']
         
-        # Obtener informacion de staff (organizadores y delegados) usando el nombre del torneo
+        # Obtener informacion de staff (organizadores y delegados)
         competition_name = competition.get('name', '')
         staff_info = self.get_competition_staff(competition_name)
         competition['organizers'] = staff_info.get('organizers', [])
@@ -824,12 +995,17 @@ def create_density_chart(event_analysis, event_id: str):
         mean_label = f'Media: {format_time(int(mean_time * 100), event_id)}'
     ax.axvline(mean_time, color='#E74C3C', linestyle='--', linewidth=2, label=mean_label)
     
-    # Agregar linea de densidad (KDE)
-    from scipy import stats
+    # Agregar linea de densidad (KDE usando numpy puro)
     try:
-        kde = stats.gaussian_kde(times_values)
-        x_range = np.linspace(min(times_values), max(times_values), 100)
-        ax.plot(x_range, kde(x_range), color='#E74C3C', linewidth=2)
+        data_arr = np.array(times_values)
+        if len(data_arr) >= 2:
+            std_val = np.std(data_arr)
+            bw = 1.06 * std_val * (len(data_arr) ** -0.2) if std_val > 0 else 1.0
+            if bw > 0:
+                x_range = np.linspace(min(times_values), max(times_values), 100)
+                u = (x_range[:, None] - data_arr[None, :]) / bw
+                kde_vals = np.mean(np.exp(-0.5 * u**2) / (bw * np.sqrt(2 * np.pi)), axis=1)
+                ax.plot(x_range, kde_vals, color='#E74C3C', linewidth=2)
     except:
         pass  # Si falla el KDE, solo mostrar histograma
     

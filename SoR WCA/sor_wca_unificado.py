@@ -17,6 +17,19 @@ import os
 import math
 import io
 import tempfile
+import warnings
+warnings.filterwarnings("ignore")
+
+if hasattr(sys.stdout, 'reconfigure'):
+    try:
+        sys.stdout.reconfigure(encoding='utf-8', errors='replace')
+    except:
+        pass
+if hasattr(sys.stderr, 'reconfigure'):
+    try:
+        sys.stderr.reconfigure(encoding='utf-8', errors='replace')
+    except:
+        pass
 
 # ──────────────────────────────────────────────
 # 0. AUTO-INSTALACIÓN DE DEPENDENCIAS
@@ -117,13 +130,13 @@ if es_multi:
         if modo == "1":
             cid = input(f"  ID de la competencia WCA #{i+1} (ej. RegionalesSantander2025): ").strip()
         else:
-            cid = input(f"  ID numérico en WCA Live #{i+1} (ej. 9455): ").strip()
+            cid = input(f"  ID de la competencia WCA / Live #{i+1} (ej. SouthOmahaScramble2026 o 11003): ").strip()
         competition_ids.append(cid)
 else:
     if modo == "1":
         cid = input("ID de la competencia WCA (ej. RegionalesSantander2025): ").strip()
     else:
-        cid = input("ID numérico de la competencia en WCA Live (ej. 9455): ").strip()
+        cid = input("ID de la competencia WCA / Live (ej. SouthOmahaScramble2026 o 11003): ").strip()
     competition_ids.append(cid)
 
 print()
@@ -416,9 +429,164 @@ def fetch_wca_export(competition_id):
             })
 
     return all_results, event_participants, competition_name
+def resolve_wca_live_id(input_id):
+    """Resuelve el ID numérico de una competencia en WCA Live clásico si se pasa un WCA ID alfanumérico."""
+    if not input_id:
+        return None
+    s_id = str(input_id).strip()
+    if s_id.isdigit():
+        return s_id
+
+    headers = {"User-Agent": "utilidades-torneos-wca", "Accept": "application/json"}
+    meta = None
+    try:
+        r = requests.get(f"https://www.worldcubeassociation.org/api/v0/competitions/{s_id}", headers=headers, timeout=15)
+        if r.ok:
+            meta = r.json()
+    except:
+        pass
+
+    name = meta.get('name') if meta else None
+    if name:
+        try:
+            q = 'query($filter: String!) { competitions(filter: $filter) { id name wcaId } }'
+            r = requests.post("https://live.worldcubeassociation.org/api", json={'query': q, 'variables': {'filter': name}}, headers=headers, timeout=15)
+            if r.ok:
+                comps = r.json().get('data', {}).get('competitions', [])
+                for c in comps:
+                    if c.get('wcaId', '').lower() == s_id.lower():
+                        return c.get('id')
+        except:
+            pass
+    return None
+
+def fetch_wca_new_live(competition_id):
+    """Intenta descargar datos de SoR desde la Nueva API Live de WCA (/live/rounds)."""
+    headers = {"User-Agent": "utilidades-torneos-wca", "Accept": "application/json"}
+    try:
+        r_rounds = requests.get(f"https://www.worldcubeassociation.org/api/v1/competitions/{competition_id}/live/rounds", headers=headers, timeout=15)
+        if not r_rounds.ok:
+            return None
+        rounds_json = r_rounds.json()
+        raw_rounds = rounds_json.get('rounds', [])
+        if not raw_rounds:
+            return None
+    except:
+        return None
+
+    print(f"\n🌐 Consultando Nueva API WCA Live para '{competition_id}'...")
+
+    meta = {}
+    try:
+        r_meta = requests.get(f"https://www.worldcubeassociation.org/api/v0/competitions/{competition_id}", headers=headers, timeout=15)
+        if r_meta.ok:
+            meta = r_meta.json()
+    except:
+        pass
+    competition_name = meta.get("name", competition_id)
+
+    wcif_persons = []
+    try:
+        r_wcif = requests.get(f"https://www.worldcubeassociation.org/api/v0/competitions/{competition_id}/wcif/public", headers=headers, timeout=15)
+        if r_wcif.ok:
+            wcif_persons = r_wcif.json().get('persons', [])
+    except:
+        pass
+
+    wcif_by_reg = {}
+    wcif_by_user = {}
+    wcif_by_id = {}
+    for p in wcif_persons:
+        w_id = p.get('wcaId')
+        reg_id = p.get('registrantId')
+        u_id = p.get('wcaUserId')
+        country_iso2 = p.get('countryIso2')
+        if reg_id is not None:
+            wcif_by_reg[reg_id] = {'wcaId': w_id, 'countryIso2': country_iso2, 'name': p.get('name')}
+        if u_id is not None:
+            wcif_by_user[u_id] = {'wcaId': w_id, 'countryIso2': country_iso2, 'name': p.get('name')}
+        if p.get('registration') and p.get('registration').get('wcaRegistrationId') is not None:
+            wcif_by_id[p['registration']['wcaRegistrationId']] = {'wcaId': w_id, 'countryIso2': country_iso2, 'name': p.get('name')}
+
+    from collections import defaultdict
+    import re
+
+    def event_id_from_round(rid):
+        return re.sub(r'-r\d+$', '', str(rid))
+
+    def round_num(rid):
+        m = re.search(r'-r(\d+)$', str(rid))
+        return int(m.group(1)) if m else 1
+
+    rounds_by_event = defaultdict(list)
+    for r in raw_rounds:
+        ev = event_id_from_round(r['id'])
+        rounds_by_event[ev].append(r)
+
+    all_results = []
+    event_participants = {}
+
+    for ev, ev_rounds in rounds_by_event.items():
+        ev_rounds_sorted = sorted(ev_rounds, key=lambda x: round_num(x['id']))
+        last_rank = {}
+
+        for idx, rnd in enumerate(ev_rounds_sorted):
+            rid = rnd['id']
+            r_det = requests.get(f"https://www.worldcubeassociation.org/api/v1/competitions/{competition_id}/live/rounds/{rid}", headers=headers, timeout=15)
+            det = r_det.json() if r_det.ok else {}
+
+            comp_by_id = {c['id']: c for c in det.get('competitors', [])}
+            results_list = det.get('results', [])
+
+            if idx == 0:
+                event_participants[ev] = len(results_list)
+
+            for res in results_list:
+                ranking = res.get('global_pos') or res.get('ranking')
+                if ranking is None:
+                    continue
+
+                reg_id = res.get('registration_id')
+                c_info = comp_by_id.get(reg_id, {})
+                c_reg = c_info.get('registrant_id')
+                c_user = c_info.get('user_id')
+
+                mapped = wcif_by_reg.get(c_reg) or wcif_by_user.get(c_user) or wcif_by_id.get(reg_id) or {}
+                wca_id = mapped.get('wcaId')
+                c_name = c_info.get('name') or mapped.get('name') or 'Desconocido'
+                pais = c_info.get('country_iso2') or mapped.get('countryIso2') or '??'
+
+                pid = wca_id if wca_id else f"LIVE_{competition_id}_{reg_id}"
+                last_rank[pid] = {
+                    "name": c_name,
+                    "rank": ranking,
+                    "regId": c_reg if c_reg is not None else (reg_id or pid),
+                    "country": pais
+                }
+
+        for pid, info in last_rank.items():
+            all_results.append({
+                "personId": pid,
+                "name": info["name"],
+                "event": ev,
+                "rank": info["rank"],
+                "regId": info["regId"],
+                "country": info["country"]
+            })
+
+    return all_results, event_participants, competition_name
+
 def fetch_wca_live(competition_id):
-    print(f"\n🌐 Consultando WCA Live (GraphQL) para id '{competition_id}'...")
+    # 1. Probar Nueva API Live de WCA
+    new_live_data = fetch_wca_new_live(competition_id)
+    if new_live_data is not None:
+        return new_live_data
+
+    # 2. Fallback a WCA Live clásico (GraphQL)
+    live_id = resolve_wca_live_id(competition_id) or competition_id
+    print(f"\n🌐 Consultando WCA Live clásico (GraphQL) para id '{live_id}'...")
     url = "https://live.worldcubeassociation.org/api"
+    headers = {"User-Agent": "utilidades-torneos-wca", "Accept": "application/json"}
 
     def build_query(con_pais):
         person_fields = "id\n                wcaId\n                name\n                registrantId"
@@ -426,7 +594,7 @@ def fetch_wca_live(competition_id):
             person_fields += "\n                country { iso2 }"
         return f"""
         {{
-          competition(id: {competition_id}) {{
+          competition(id: "{live_id}") {{
             id
             name
             competitionEvents {{
@@ -445,7 +613,7 @@ def fetch_wca_live(competition_id):
         }}
         """
 
-    resp = requests.post(url, json={"query": build_query(True)}, timeout=30)
+    resp = requests.post(url, json={"query": build_query(True)}, headers=headers, timeout=30)
     resp.raise_for_status()
     data = resp.json()
 
@@ -453,15 +621,15 @@ def fetch_wca_live(competition_id):
     if "errors" in data:
         # El esquema puede no exponer "country" en Person; reintentamos sin ese campo
         tiene_pais = False
-        resp = requests.post(url, json={"query": build_query(False)}, timeout=30)
+        resp = requests.post(url, json={"query": build_query(False)}, headers=headers, timeout=30)
         resp.raise_for_status()
         data = resp.json()
         if "errors" in data:
             sys.exit(f"❌ Error GraphQL: {data['errors']}")
 
-    competition = data["data"]["competition"]
+    competition = data.get("data", {}).get("competition")
     if competition is None:
-        sys.exit(f"❌ No se encontró la competencia '{competition_id}' en WCA Live.")
+        sys.exit(f"❌ No se encontró la competencia '{competition_id}' (Live ID: '{live_id}') en WCA Live.")
 
     competition_name = competition["name"]
     all_results = []
@@ -478,11 +646,8 @@ def fetch_wca_live(competition_id):
         for rnd in ev["rounds"]:
             for result in rnd["results"]:
                 # Usamos el wcaId (global) como llave de cruce entre torneos.
-                # Si el competidor no tiene wcaId (poco común), se usa su id
-                # interno de WCA Live + el id del torneo como llave local
-                # (no se podrá cruzar con otro torneo en ese caso).
                 wca_id = result["person"].get("wcaId")
-                pid = wca_id if wca_id else f"LIVE_{competition_id}_{result['person']['id']}"
+                pid = wca_id if wca_id else f"LIVE_{live_id}_{result['person']['id']}"
                 pais_obj = result["person"].get("country") if tiene_pais else None
                 pais = pais_obj.get("iso2", "??") if pais_obj else "??"
                 last_rank[pid] = {

@@ -53,8 +53,10 @@ def latex_to_image_bytes(formula, fontsize=14, dpi=150,
     return buf.getvalue()
 
 # Configuración
+WCA_NEW_LIVE_API = "https://www.worldcubeassociation.org/api/v1"
 WCA_LIVE_API = "https://live.worldcubeassociation.org/api"
-WCA_API = "https://worldcubeassociation.org/api/v0"
+WCA_API = "https://www.worldcubeassociation.org/api/v0"
+API_HEADERS = {"User-Agent": "utilidades-torneos-wca", "Accept": "application/json"}
 
 # Nombres de eventos
 EVENT_NAMES = {
@@ -82,19 +84,195 @@ def format_time(cs, eid="333"):
     secs = secs % 60
     return f"{mins}:{secs:05.2f}"
 
+def event_id_from_round_id(round_id):
+    import re
+    return re.sub(r'-r\d+$', '', str(round_id))
+
+def round_number_from_id(round_id):
+    import re
+    m = re.search(r'-r(\d+)$', str(round_id))
+    return int(m.group(1)) if m else 1
+
+def round_name_for(total_rounds, idx):
+    if total_rounds <= 1 or idx == total_rounds - 1:
+        return 'Final'
+    if total_rounds >= 4 and idx == total_rounds - 2:
+        return 'Semi Final'
+    return f'Round {idx + 1}'
+
+def resolve_wca_live_id(input_id):
+    """Resuelve el ID numérico de una competencia en WCA Live clásico si se pasa un WCA ID alfanumérico."""
+    if not input_id:
+        return None
+    s_id = str(input_id).strip()
+    if s_id.isdigit():
+        return s_id
+
+    meta = None
+    try:
+        r = requests.get(f"{WCA_API}/competitions/{s_id}", headers=API_HEADERS, timeout=15)
+        if r.ok:
+            meta = r.json()
+    except:
+        pass
+
+    name = meta.get('name') if meta else None
+    if name:
+        try:
+            q = 'query($filter: String!) { competitions(filter: $filter) { id name wcaId } }'
+            r = requests.post(WCA_LIVE_API, json={'query': q, 'variables': {'filter': name}}, headers=API_HEADERS, timeout=15)
+            if r.ok:
+                comps = r.json().get('data', {}).get('competitions', [])
+                for c in comps:
+                    if c.get('wcaId', '').lower() == s_id.lower():
+                        return c.get('id')
+        except:
+            pass
+    return None
+
+def fetch_new_live_competition(comp_id):
+    """Obtiene datos de la competencia desde la Nueva API Live de WCA (/live/rounds)."""
+    try:
+        r_rounds = requests.get(f"{WCA_NEW_LIVE_API}/competitions/{comp_id}/live/rounds", headers=API_HEADERS, timeout=15)
+        if not r_rounds.ok:
+            return None
+        rounds_json = r_rounds.json()
+        raw_rounds = rounds_json.get('rounds', [])
+        if not raw_rounds:
+            return None
+    except:
+        return None
+
+    meta = {}
+    try:
+        r_meta = requests.get(f"{WCA_API}/competitions/{comp_id}", headers=API_HEADERS, timeout=15)
+        if r_meta.ok:
+            meta = r_meta.json()
+    except:
+        pass
+
+    wcif_persons = []
+    try:
+        r_wcif = requests.get(f"{WCA_API}/competitions/{comp_id}/wcif/public", headers=API_HEADERS, timeout=15)
+        if r_wcif.ok:
+            wcif_persons = r_wcif.json().get('persons', [])
+    except:
+        pass
+
+    wcif_by_reg = {}
+    wcif_by_user = {}
+    wcif_by_id = {}
+    for p in wcif_persons:
+        w_id = p.get('wcaId')
+        reg_id = p.get('registrantId')
+        u_id = p.get('wcaUserId')
+        country_iso2 = p.get('countryIso2')
+        if reg_id is not None:
+            wcif_by_reg[reg_id] = {'wcaId': w_id, 'countryIso2': country_iso2, 'name': p.get('name')}
+        if u_id is not None:
+            wcif_by_user[u_id] = {'wcaId': w_id, 'countryIso2': country_iso2, 'name': p.get('name')}
+        if p.get('registration') and p.get('registration').get('wcaRegistrationId') is not None:
+            wcif_by_id[p['registration']['wcaRegistrationId']] = {'wcaId': w_id, 'countryIso2': country_iso2, 'name': p.get('name')}
+
+    from collections import defaultdict
+    rounds_by_event = defaultdict(list)
+    for r in raw_rounds:
+        ev = event_id_from_round_id(r['id'])
+        rounds_by_event[ev].append(r)
+
+    all_competitors_map = {}
+    competition_events = []
+
+    for ev, ev_rounds in rounds_by_event.items():
+        ev_rounds_sorted = sorted(ev_rounds, key=lambda x: round_number_from_id(x['id']))
+        comp_event_rounds = []
+        for idx, rnd in enumerate(ev_rounds_sorted):
+            rid = rnd['id']
+            r_det = requests.get(f"{WCA_NEW_LIVE_API}/competitions/{comp_id}/live/rounds/{rid}", headers=API_HEADERS, timeout=15)
+            det = r_det.json() if r_det.ok else {}
+
+            comp_by_id = {c['id']: c for c in det.get('competitors', [])}
+            parsed_results = []
+
+            for res in det.get('results', []):
+                reg_id = res.get('registration_id')
+                c_info = comp_by_id.get(reg_id, {})
+                c_reg = c_info.get('registrant_id')
+                c_user = c_info.get('user_id')
+
+                mapped = wcif_by_reg.get(c_reg) or wcif_by_user.get(c_user) or wcif_by_id.get(reg_id) or {}
+                wca_id = mapped.get('wcaId')
+                c_name = c_info.get('name') or mapped.get('name') or 'Desconocido'
+                country_name = c_info.get('country_iso2') or mapped.get('countryIso2') or ''
+
+                person_key = str(reg_id) if reg_id is not None else str(c_reg)
+                if person_key not in all_competitors_map:
+                    all_competitors_map[person_key] = {
+                        'id': person_key,
+                        'registrantId': c_reg,
+                        'name': c_name,
+                        'wcaId': wca_id,
+                        'country': {'name': country_name}
+                    }
+
+                parsed_results.append({
+                    'person': {'id': person_key, 'name': c_name, 'wcaId': wca_id, 'country': {'name': country_name}},
+                    'best': res.get('best', 0),
+                    'average': res.get('average', 0),
+                    'ranking': res.get('global_pos') or res.get('ranking'),
+                    'singleRecordTag': res.get('single_record_tag'),
+                    'averageRecordTag': res.get('average_record_tag'),
+                    'attempts': [{'result': a.get('value', 0)} for a in res.get('attempts', [])]
+                })
+
+            comp_event_rounds.append({
+                'id': rid,
+                'name': round_name_for(len(ev_rounds_sorted), idx),
+                'number': round_number_from_id(rid),
+                '_raw_results': parsed_results
+            })
+
+        competition_events.append({
+            'id': ev,
+            'event': {'id': ev, 'name': get_event_name(ev)},
+            'rounds': comp_event_rounds
+        })
+
+    return {
+        'id': comp_id,
+        'name': meta.get('name', comp_id),
+        'startDate': meta.get('start_date'),
+        'endDate': meta.get('end_date'),
+        'competitorLimit': meta.get('competitor_limit'),
+        'competitors': list(all_competitors_map.values()),
+        'competitionEvents': competition_events,
+        'source': 'NEW_LIVE'
+    }
+
 def wca_live_query(query):
-    """Ejecuta una query GraphQL en WCA Live"""
-    r = requests.post(WCA_LIVE_API, json={'query': query}, timeout=30)
+    """Ejecuta una query GraphQL en WCA Live clásico"""
+    r = requests.post(WCA_LIVE_API, json={'query': query}, headers=API_HEADERS, timeout=30)
     r.raise_for_status()
     return r.json().get('data', {})
 
 def get_competition(comp_id):
-    """Obtiene información de un torneo"""
-    query = '{ competition(id: "%s") { id name startDate competitors { id name wcaId country { name } } competitionEvents { id event { id name } rounds { id name number } } } }' % comp_id
-    return wca_live_query(query)
+    """Obtiene información de un torneo intentando Nueva Live y luego WCA Live clásico"""
+    # 1. Intentar Nueva Live API
+    new_live_data = fetch_new_live_competition(comp_id)
+    if new_live_data:
+        return {'competition': new_live_data}
 
-def get_round_results(round_id):
-    """Obtiene resultados de una ronda"""
+    # 2. Fallback a WCA Live clásico (GraphQL)
+    live_id = resolve_wca_live_id(comp_id) or comp_id
+    query = '{ competition(id: "%s") { id name startDate competitors { id name wcaId country { name } } competitionEvents { id event { id name } rounds { id name number } } } }' % live_id
+    data = wca_live_query(query)
+    return data
+
+def get_round_results(round_obj_or_id):
+    """Obtiene resultados de una ronda (desde objeto precargado de New Live o vía query GraphQL)"""
+    if isinstance(round_obj_or_id, dict) and '_raw_results' in round_obj_or_id:
+        return {'round': {'results': round_obj_or_id['_raw_results']}}
+    round_id = round_obj_or_id.get('id') if isinstance(round_obj_or_id, dict) else str(round_obj_or_id)
     query = '{ round(id: "%s") { id results { person { id name wcaId } best average ranking singleRecordTag averageRecordTag } } }' % round_id
     return wca_live_query(query)
 
@@ -343,34 +521,48 @@ def analyze_competitor(comp_id, reg_id):
     data = get_competition(comp_id)
     comp = data.get('competition', {})
     
-    # Buscar al competidor
+    # Buscar al competidor (por id interno, registrantId o wcaId)
     competitor = None
+    target_str = str(reg_id).strip()
     for c in comp.get('competitors', []):
-        if str(c['id']) == str(reg_id):
+        if (str(c.get('id', '')) == target_str or 
+            str(c.get('registrantId', '')) == target_str or 
+            (c.get('wcaId') and c.get('wcaId', '').lower() == target_str.lower())):
             competitor = c
             break
-    
+
     if not competitor:
         print(f"Competidor {reg_id} no encontrado")
         return None
-    
+
+    matched_id = str(competitor.get('id', ''))
+    matched_reg = str(competitor.get('registrantId', ''))
+    matched_wca = str(competitor.get('wcaId', '')).lower() if competitor.get('wcaId') else None
+
     print(f"Competidor: {competitor['name']}")
     print(f"WCA ID: {competitor.get('wcaId', 'Sin WCA ID')}")
-    
+
     # Obtener resultados - Agrupados por evento (mejor resultado de todas las rondas)
     event_results = {}  # Diccionario para agrupar por evento
-    
+
     for event in comp.get('competitionEvents', []):
         event_id = event.get('event', {}).get('id', '')
         event_name = get_event_name(event_id)
-        
+
         for round_data in event.get('rounds', []):
-            round_id = round_data['id']
-            round_results = get_round_results(round_id)
-            
+            round_results = get_round_results(round_data)
+
             for result in round_results.get('round', {}).get('results', []):
-                person_id = str(result.get('person', {}).get('id', ''))
-                if person_id == str(reg_id):
+                person = result.get('person', {})
+                person_id = str(person.get('id', ''))
+                person_wca = str(person.get('wcaId', '')).lower() if person.get('wcaId') else None
+                person_reg = str(person.get('registrantId', ''))
+
+                is_match = (person_id == matched_id or 
+                            (matched_reg and person_reg == matched_reg) or 
+                            (matched_wca and person_wca == matched_wca))
+
+                if is_match:
                     if event_id not in event_results:
                         event_results[event_id] = {
                             'event_id': event_id,
