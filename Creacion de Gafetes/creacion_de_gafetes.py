@@ -377,8 +377,14 @@ tpl_page = tpl_reader.pages[0]
 TPL_W = float(tpl_page.mediabox.width)
 TPL_H = float(tpl_page.mediabox.height)
 
-# ---------- 6. Nombres oficiales ----------
-event_names = {
+# ---------- 6. Nombres oficiales y orden WCA ----------
+WCA_EVENT_ORDER = [
+    "333", "222", "444", "555", "666", "777",
+    "333bf", "333fm", "333oh", "clock", "minx",
+    "pyram", "skewb", "sq1", "444bf", "555bf", "333mbf"
+]
+
+event_names_long = {
     "222": "2x2", "333": "3x3", "444": "4x4", "555": "5x5", "666": "6x6", "777": "7x7",
     "333bf": "3x3 Blindfolded", "333fm": "3x3 Fewest Moves", "333oh": "3x3 One-Handed",
     "clock": "Clock", "minx": "Megaminx", "pyram": "Pyraminx", "skewb": "Skewb",
@@ -386,6 +392,12 @@ event_names = {
     "333mbf": "3x3 Multi-Blind"
 }
 
+event_names_short = {
+    "222": "2x2", "333": "3x3", "444": "4x4", "555": "5x5", "666": "6x6", "777": "7x7",
+    "333bf": "3BLD", "333fm": "FMC", "333oh": "3x3 OH", "clock": "Clock", "minx": "Megaminx",
+    "pyram": "Pyraminx", "skewb": "Skewb", "sq1": "Square-1", "444bf": "4BLD", "555bf": "5BLD",
+    "333mbf": "MBLD"
+}
 
 # ---------- 7. Crear gafetes individuales ----------
 print("Generando gafetes individuales usando la plantilla...")
@@ -418,7 +430,6 @@ def get_flag(country_code):
 final_gafetes = []
 for idx, comp in enumerate(competitors):
     wid = comp["wca_id"]
-    # Get country code for flag
     country_code = comp.get("country")
     competitor_name = comp["name"] or str(comp["user_id"])
     
@@ -433,92 +444,98 @@ for idx, comp in enumerate(competitors):
     # ======================
     # Ajustes de posiciones
     # ======================
-    left_margin = 0.75 * cm
-    box_top = TPL_H - 5.5*cm
-    line_spacing = 11
+    box_top = TPL_H - 5.3 * cm
 
-    # ===== Nombre del competidor =====
-    c.setFont("Helvetica-Bold", 12)
+    # ===== Nombre del competidor (con ajuste automático de tamaño para nombres largos) =====
+    name_font_size = 12.0
+    flag_width = 0.8 * cm
+    flag_height = 0.53 * cm
+    max_name_width = TPL_W - (flag_width + 0.8 * cm if flag_image else 1.0 * cm)
+    
+    while name_font_size > 7.5 and c.stringWidth(competitor_name, "Helvetica-Bold", name_font_size) > max_name_width:
+        name_font_size -= 0.5
+
+    c.setFont("Helvetica-Bold", name_font_size)
+    name_width = c.stringWidth(competitor_name, "Helvetica-Bold", name_font_size)
+
     if flag_image:
-        # Draw flag to the LEFT of the name
-        flag_width = 0.8 * cm
-        flag_height = 0.53 * cm  # Maintain aspect ratio
         center_x = TPL_W / 2
-        # Calculate position: flag to the left, name centered
-        name_width = c.stringWidth(competitor_name, "Helvetica-Bold", 12)
         total_width = flag_width + 0.3 * cm + name_width
         start_x = center_x - total_width / 2
-        
-        # Draw flag first (to the left)
-        c.drawImage(flag_image, start_x, TPL_H - 4.2*cm, width=flag_width, height=flag_height, mask='auto')
-        # Draw name after flag
-        c.drawString(start_x + flag_width + 0.3*cm, TPL_H - 4.1*cm, competitor_name)
+        c.drawImage(flag_image, start_x, TPL_H - 4.2 * cm, width=flag_width, height=flag_height, mask='auto')
+        c.drawString(start_x + flag_width + 0.3 * cm, TPL_H - 4.1 * cm, competitor_name)
     else:
-        # No flag, just center the name
-        c.drawCentredString(TPL_W/2, TPL_H - 4.1*cm, competitor_name)
+        c.drawCentredString(TPL_W / 2, TPL_H - 4.1 * cm, competitor_name)
 
-    # ----- Records Personales -----
-    c.setFont("Helvetica-Bold", 10)
+    # ----- Título Records Personales -----
+    c.setFont("Helvetica-Bold", 9.5)
     title = "Records Personales (Single,Average):"
-    title_width = c.stringWidth(title, "Helvetica-Bold", 10)
-    title_x = (TPL_W - title_width) / 2
-    c.drawString(title_x, box_top, title)
+    title_width = c.stringWidth(title, "Helvetica-Bold", 9.5)
+    c.drawString((TPL_W - title_width) / 2, box_top, title)
 
-    # Calcular distribución óptima de columnas
-    num_events = len(dfc)
-    if num_events <= 6:
-        num_cols = 1
-    elif num_events <= 12:
-        num_cols = 2
-    else:
-        num_cols = 2
-    
-    font_size = 8
-    c.setFont("Helvetica", font_size)
-
-    col_gap = 0.4 * cm
-    usable_width = TPL_W - 2 * left_margin
-    
-    if num_cols == 1:
-        # Centrar la única columna
-        # Usar aproximadamente 60% del ancho disponible para la columna
-        col_width = usable_width * 0.6
-        # Centrar la columna en el espacio disponible
-        total_col_width = col_width
-        x_positions = [(usable_width - total_col_width) / 2 + left_margin]
-    else:
-        col_width = (usable_width - col_gap) / num_cols
-        x_positions = [left_margin + i * (col_width + col_gap) for i in range(num_cols)]
-    
-    line_spacing = 10
-    y_start = box_top - 2.0 * line_spacing
-
+    # Convertir a lista y ordenar según el orden oficial WCA
     events_list = dfc.to_dict('records')
-    
-    for i, ev_data in enumerate(events_list):
-        if num_cols == 1:
-            col = 0
-            row = i
+    events_list.sort(key=lambda x: WCA_EVENT_ORDER.index(x['event']) if x['event'] in WCA_EVENT_ORDER else 99)
+    num_events = len(events_list)
+
+    if num_events == 0:
+        # Debutante sin PRs aún registrados
+        c.setFont("Helvetica-Oblique", 9)
+        c.setFillColorRGB(0.2, 0.2, 0.2)
+        debut_msg = "Primer Torneo Oficial WCA"
+        dm_width = c.stringWidth(debut_msg, "Helvetica-Oblique", 9)
+        c.drawString((TPL_W - dm_width) / 2, box_top - 26, debut_msg)
+        c.setFillColorRGB(0, 0, 0)
+    elif num_events <= 7:
+        # Distribución en 1 columna centrada
+        font_size = 8.5 if num_events <= 4 else 8.0
+        line_spacing = 13.0 if num_events <= 4 else 11.0
+        y_start = box_top - 15.0
+        c.setFont("Helvetica", font_size)
+        
+        for i, ev_data in enumerate(events_list):
+            ev = ev_data["event"]
+            ev_name = event_names_long.get(ev, ev)
+            s = ev_data["single_f"]
+            a = ev_data["average_f"]
+            line = f"{ev_name}: {s}" + (f" / {a}" if a else "")
+            line_w = c.stringWidth(line, "Helvetica", font_size)
+            x = (TPL_W - line_w) / 2
+            y = y_start - i * line_spacing
+            c.drawString(x, y, line)
+    else:
+        # Distribución en 2 columnas balanceadas
+        split = (num_events + 1) // 2
+        if split <= 6:
+            font_size = 7.5
+            line_spacing = 10.5
+        elif split <= 8:
+            font_size = 7.0
+            line_spacing = 9.2
         else:
-            # Distribuir evenly: si hay 8 eventos, 4 y 4
-            # Si hay 7 eventos, 4 y 3
-            split = num_events // 2
+            font_size = 6.5
+            line_spacing = 8.5
+        
+        y_start = box_top - 13.0
+        left_margin = 0.55 * cm
+        usable_width = TPL_W - 2 * left_margin
+        col_gap = 0.3 * cm
+        col_width = (usable_width - col_gap) / 2
+        x_positions = [left_margin, left_margin + col_width + col_gap]
+        
+        c.setFont("Helvetica", font_size)
+        for i, ev_data in enumerate(events_list):
             col = 0 if i < split else 1
             row = i if i < split else i - split
-        
-        ev = ev_data["event"]
-        ev_name = event_names.get(ev, ev)
-        s = ev_data["single_f"]
-        a = ev_data["average_f"]
-        line = f"{ev_name}: {s}" + (f" / {a}" if a else "")
-        
-        x = x_positions[col]
-        y = y_start - row * line_spacing
-        
-        if y < 2 * cm:
-            break
-        
-        c.drawString(x, y, line)
+            ev = ev_data["event"]
+            ev_name = event_names_short.get(ev, ev)
+            s = ev_data["single_f"]
+            a = ev_data["average_f"]
+            line = f"{ev_name}: {s}" + (f" / {a}" if a else "")
+            
+            x = x_positions[col]
+            y = y_start - row * line_spacing
+            c.drawString(x, y, line)
 
     c.save()
     # Superponer overlay en plantilla
