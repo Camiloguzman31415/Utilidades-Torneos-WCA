@@ -525,7 +525,7 @@ for idx, comp in enumerate(competitors):
     # ======================
     # Ajustes de posiciones
     # ======================
-    box_top = 18 + 114 - 13.0  # Posición del título dentro del recuadro bajado
+    box_top = 18 + 114 - 11.5  # Posición del título dentro del recuadro bajado
 
     # ===== Nombre del competidor (con ajuste automático de tamaño para nombres largos) =====
     name_font_size = 12.0
@@ -588,7 +588,7 @@ for idx, comp in enumerate(competitors):
         # Distribución en 1 columna centrada
         font_size = 8.5 if num_events <= 4 else 8.0
         line_spacing = 13.0 if num_events <= 4 else 11.0
-        y_start = box_top - 15.0
+        y_start = box_top - 18.0
         c.setFont("Helvetica", font_size)
         
         for i, ev_data in enumerate(events_list):
@@ -597,10 +597,8 @@ for idx, comp in enumerate(competitors):
             s = ev_data["single_f"]
             a = ev_data["average_f"]
             line = f"{ev_name}: {s}" + (f" / {a}" if a else "")
-            line_w = c.stringWidth(line, "Helvetica", font_size)
-            x = (TPL_W - line_w) / 2
             y = y_start - i * line_spacing
-            c.drawString(x, y, line)
+            c.drawCentredString(TPL_W / 2, y, line)
     else:
         # Distribución en 2 columnas balanceadas
         split = (num_events + 1) // 2
@@ -614,7 +612,7 @@ for idx, comp in enumerate(competitors):
             font_size = 6.5
             line_spacing = 8.5
         
-        y_start = box_top - 13.0
+        y_start = box_top - 17.0
         col_centers = [box_x + box_w * 0.25, box_x + box_w * 0.75]
         
         c.setFont("Helvetica", font_size)
