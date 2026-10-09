@@ -615,11 +615,7 @@ for idx, comp in enumerate(competitors):
             line_spacing = 8.5
         
         y_start = box_top - 13.0
-        left_margin = 0.55 * cm
-        usable_width = TPL_W - 2 * left_margin
-        col_gap = 0.3 * cm
-        col_width = (usable_width - col_gap) / 2
-        x_positions = [left_margin, left_margin + col_width + col_gap]
+        col_centers = [box_x + box_w * 0.25, box_x + box_w * 0.75]
         
         c.setFont("Helvetica", font_size)
         for i, ev_data in enumerate(events_list):
@@ -631,9 +627,8 @@ for idx, comp in enumerate(competitors):
             a = ev_data["average_f"]
             line = f"{ev_name}: {s}" + (f" / {a}" if a else "")
             
-            x = x_positions[col]
             y = y_start - row * line_spacing
-            c.drawString(x, y, line)
+            c.drawCentredString(col_centers[col], y, line)
 
     c.save()
     # Superponer overlay en plantilla
