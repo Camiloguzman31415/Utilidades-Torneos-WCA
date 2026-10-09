@@ -62,17 +62,38 @@ import fitz  # pymupdf
 from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.ttfonts import TTFont
 
-# Registro automático de fuentes estilizadas para roles
-FUENTE_ROL_REGISTRADA = "Helvetica-Bold"
-for font_path in ["C:/Windows/Fonts/impact.ttf", "C:/Windows/Fonts/trebucbd.ttf", "/Library/Fonts/Impact.ttf", "/usr/share/fonts/truetype/msttcorefonts/Impact.ttf"]:
-    if os.path.exists(font_path):
+# Registro automático de fuentes locales y del sistema
+FONTS_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "fonts")
+FUENTE_ROL_DEFAULT = "Helvetica-Bold"
+
+# 1. Cargar fuentes locales de alta calidad si existen
+font_files = {
+    "BebasNeue": os.path.join(FONTS_DIR, "BebasNeue.ttf"),
+    "Montserrat-Bold": os.path.join(FONTS_DIR, "Montserrat-Bold.ttf"),
+    "Oswald-Bold": os.path.join(FONTS_DIR, "Oswald-Bold.ttf"),
+    "Teko-Bold": os.path.join(FONTS_DIR, "Teko-Bold.ttf"),
+    "RussoOne": os.path.join(FONTS_DIR, "RussoOne.ttf"),
+}
+for fname, fpath in font_files.items():
+    if os.path.exists(fpath):
         try:
-            fname = "Impact" if "impact" in font_path.lower() else "Trebuchet-Bold"
-            pdfmetrics.registerFont(TTFont(fname, font_path))
-            FUENTE_ROL_REGISTRADA = fname
-            break
+            pdfmetrics.registerFont(TTFont(fname, fpath))
+            if fname == "BebasNeue":
+                FUENTE_ROL_DEFAULT = "BebasNeue"
         except Exception:
             pass
+
+# 2. Si no hay locales, buscar en sistema
+if FUENTE_ROL_DEFAULT == "Helvetica-Bold":
+    for sys_font in ["C:/Windows/Fonts/impact.ttf", "C:/Windows/Fonts/trebucbd.ttf"]:
+        if os.path.exists(sys_font):
+            try:
+                name = "Impact" if "impact" in sys_font.lower() else "Trebuchet-Bold"
+                pdfmetrics.registerFont(TTFont(name, sys_font))
+                FUENTE_ROL_DEFAULT = name
+                break
+            except Exception:
+                pass
 
 # ---------- Config ----------
 TEMPLATE = "Plantilla Gafete.pdf"               # asegúrate de subirla
@@ -94,8 +115,8 @@ GROSOR_LINEA = 1.0                  # Grosor de la línea en puntos (pt)
 # 3. Texto del Rol (ej. COMPETIDOR, ORGANIZADOR, DELEGADO)
 DIBUJAR_TEXTO_ROL = True            # True: dibuja el rol centrado debajo de la línea
 TEXTO_ROL_DEFAULT = "COMPETIDOR"    # Texto por defecto
-FUENTE_ROL = FUENTE_ROL_REGISTRADA  # Tipografía estilizada ("Impact", "Trebuchet-Bold", "Helvetica-Bold")
-TAMANO_FUENTE_ROL = 11.5            # Tamaño de fuente del rol
+FUENTE_ROL = FUENTE_ROL_DEFAULT     # Opciones: "BebasNeue", "Montserrat-Bold", "Oswald-Bold", "Teko-Bold", "RussoOne", "Helvetica-Bold"
+TAMANO_FUENTE_ROL = 14.5 if FUENTE_ROL_DEFAULT == "BebasNeue" else 11.0  # Tamaño de fuente del rol
 COLOR_ROL = (0.08, 0.08, 0.08)      # Color del texto del rol
 ROLES_PERSONALIZADOS = {            # Diccionario opcional de roles por WCA ID: {"2023ESPI07": "COMPETIDOR", ...}
     # "2018ABCD01": "ORGANIZADOR",
@@ -532,7 +553,7 @@ for idx, comp in enumerate(competitors):
         c.saveState()
         c.setStrokeColorRGB(*COLOR_LINEA)
         c.setLineWidth(GROSOR_LINEA)
-        c.line(22, TPL_H - 4.52 * cm, TPL_W - 22, TPL_H - 4.52 * cm)
+        c.line(22, TPL_H - 4.45 * cm, TPL_W - 22, TPL_H - 4.45 * cm)
         c.restoreState()
 
     # ===== Texto del Rol del participante (Opcional) =====
@@ -541,7 +562,7 @@ for idx, comp in enumerate(competitors):
         c.setFont(FUENTE_ROL, TAMANO_FUENTE_ROL)
         c.setFillColorRGB(*COLOR_ROL)
         rol_text = ROLES_PERSONALIZADOS.get(wid, TEXTO_ROL_DEFAULT)
-        c.drawCentredString(TPL_W / 2, TPL_H - 4.88 * cm, rol_text)
+        c.drawCentredString(TPL_W / 2, TPL_H - 4.95 * cm, rol_text)
         c.restoreState()
 
     # ----- Título Records Personales -----
