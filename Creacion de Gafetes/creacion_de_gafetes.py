@@ -62,7 +62,15 @@ import fitz  # pymupdf
 
 # ---------- Config ----------
 TEMPLATE = "Plantilla Gafete.pdf"               # asegúrate de subirla
-# OUTPUT_PDF se definirá después de obtener el competition_id
+
+# Opciones del recuadro automático de Records Personales
+DIBUJAR_CUADRO_RECORDS = True       # True: genera el recuadro gris redondeado translúcido desde código
+OPACIDAD_CUADRO = 0.60              # Transparencia del fondo (0.0 = transparente, 1.0 = opaco)
+COLOR_CUADRO = (0.85, 0.85, 0.85)   # Color RGB del recuadro (gris claro translúcido)
+BORDE_CUADRO = True                 # Dibuja un borde sutil
+OPACIDAD_BORDE = 0.25               # Transparencia del borde
+COLOR_BORDE = (1.0, 1.0, 1.0)       # Color RGB del borde (blanco)
+RADIO_ESQUINAS = 12                 # Curvatura de esquinas en puntos (pt)
 
 # Solicitar competition_id al usuario
 print("\n" + "="*50)
@@ -440,6 +448,28 @@ for idx, comp in enumerate(competitors):
 
     overlay = os.path.join(TEMP_DIR, f"overlay_{idx:03d}.pdf")
     c = canvas.Canvas(overlay, pagesize=(TPL_W, TPL_H))
+
+    # ========================================================
+    # Recuadro redondeado translúcido para los Records (Opcional)
+    # ========================================================
+    if DIBUJAR_CUADRO_RECORDS:
+        c.saveState()
+        c.setFillAlpha(OPACIDAD_CUADRO)
+        c.setFillColorRGB(*COLOR_CUADRO)
+        if BORDE_CUADRO:
+            c.setStrokeAlpha(OPACIDAD_BORDE)
+            c.setStrokeColorRGB(*COLOR_BORDE)
+            stroke_flag = 1
+        else:
+            c.setStrokeAlpha(0)
+            stroke_flag = 0
+        
+        box_x = 12
+        box_y = 26
+        box_w = TPL_W - 24
+        box_h = 118
+        c.roundRect(box_x, box_y, box_w, box_h, RADIO_ESQUINAS, fill=1, stroke=stroke_flag)
+        c.restoreState()
 
     # ======================
     # Ajustes de posiciones
