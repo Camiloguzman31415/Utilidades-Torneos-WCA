@@ -73,16 +73,16 @@ COLOR_BORDE = (1.0, 1.0, 1.0)       # Color RGB del borde (blanco)
 RADIO_ESQUINAS = 12                 # Curvatura de esquinas en puntos (pt)
 
 # 2. Línea horizontal separadora
-DIBUJAR_LINEA_SEPARADORA = False    # True: dibuja la línea entre el nombre y el rol (actívalo si tu plantilla no la tiene)
-COLOR_LINEA = (0.15, 0.15, 0.15)    # Color RGB de la línea
-GROSOR_LINEA = 0.8                  # Grosor de la línea en puntos (pt)
+DIBUJAR_LINEA_SEPARADORA = True     # True: dibuja la línea entre el nombre y el rol
+COLOR_LINEA = (0.12, 0.12, 0.12)    # Color RGB de la línea
+GROSOR_LINEA = 1.0                  # Grosor de la línea en puntos (pt)
 
 # 3. Texto del Rol (ej. COMPETIDOR, ORGANIZADOR, DELEGADO)
-DIBUJAR_TEXTO_ROL = False           # True: dibuja el rol centrado (actívalo si tu plantilla no tiene la palabra COMPETIDOR)
+DIBUJAR_TEXTO_ROL = True            # True: dibuja el rol centrado debajo de la línea
 TEXTO_ROL_DEFAULT = "COMPETIDOR"    # Texto por defecto
-FUENTE_ROL = "Helvetica-Bold"       # Tipografía ("Helvetica-Bold", "Helvetica-BoldOblique", etc.)
+FUENTE_ROL = "Helvetica-BoldOblique"# Tipografía ("Helvetica-BoldOblique", "Helvetica-Bold", etc.)
 TAMANO_FUENTE_ROL = 10.5            # Tamaño de fuente
-COLOR_ROL = (0.1, 0.1, 0.1)         # Color del texto del rol
+COLOR_ROL = (0.08, 0.08, 0.08)      # Color del texto del rol
 ROLES_PERSONALIZADOS = {            # Diccionario opcional de roles por WCA ID: {"2023ESPI07": "COMPETIDOR", ...}
     # "2018ABCD01": "ORGANIZADOR",
     # "2015XYZW02": "DELEGADO WCA",
@@ -490,7 +490,7 @@ for idx, comp in enumerate(competitors):
     # ======================
     # Ajustes de posiciones
     # ======================
-    box_top = TPL_H - 5.3 * cm
+    box_top = TPL_H - 5.38 * cm
 
     # ===== Nombre del competidor (con ajuste automático de tamaño para nombres largos) =====
     name_font_size = 12.0
@@ -518,7 +518,7 @@ for idx, comp in enumerate(competitors):
         c.saveState()
         c.setStrokeColorRGB(*COLOR_LINEA)
         c.setLineWidth(GROSOR_LINEA)
-        c.line(22, TPL_H - 4.65 * cm, TPL_W - 22, TPL_H - 4.65 * cm)
+        c.line(22, TPL_H - 4.58 * cm, TPL_W - 22, TPL_H - 4.58 * cm)
         c.restoreState()
 
     # ===== Texto del Rol del participante (Opcional) =====
@@ -527,7 +527,7 @@ for idx, comp in enumerate(competitors):
         c.setFont(FUENTE_ROL, TAMANO_FUENTE_ROL)
         c.setFillColorRGB(*COLOR_ROL)
         rol_text = ROLES_PERSONALIZADOS.get(wid, TEXTO_ROL_DEFAULT)
-        c.drawCentredString(TPL_W / 2, TPL_H - 4.98 * cm, rol_text)
+        c.drawCentredString(TPL_W / 2, TPL_H - 4.96 * cm, rol_text)
         c.restoreState()
 
     # ----- Título Records Personales -----
