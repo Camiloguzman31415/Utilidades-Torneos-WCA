@@ -63,7 +63,7 @@ import fitz  # pymupdf
 # ---------- Config ----------
 TEMPLATE = "Plantilla Gafete.pdf"               # asegúrate de subirla
 
-# Opciones del recuadro automático de Records Personales
+# 1. Recuadro automático de Records Personales
 DIBUJAR_CUADRO_RECORDS = True       # True: genera el recuadro gris redondeado translúcido desde código
 OPACIDAD_CUADRO = 0.60              # Transparencia del fondo (0.0 = transparente, 1.0 = opaco)
 COLOR_CUADRO = (0.85, 0.85, 0.85)   # Color RGB del recuadro (gris claro translúcido)
@@ -71,6 +71,22 @@ BORDE_CUADRO = True                 # Dibuja un borde sutil
 OPACIDAD_BORDE = 0.25               # Transparencia del borde
 COLOR_BORDE = (1.0, 1.0, 1.0)       # Color RGB del borde (blanco)
 RADIO_ESQUINAS = 12                 # Curvatura de esquinas en puntos (pt)
+
+# 2. Línea horizontal separadora
+DIBUJAR_LINEA_SEPARADORA = False    # True: dibuja la línea entre el nombre y el rol (actívalo si tu plantilla no la tiene)
+COLOR_LINEA = (0.15, 0.15, 0.15)    # Color RGB de la línea
+GROSOR_LINEA = 0.8                  # Grosor de la línea en puntos (pt)
+
+# 3. Texto del Rol (ej. COMPETIDOR, ORGANIZADOR, DELEGADO)
+DIBUJAR_TEXTO_ROL = False           # True: dibuja el rol centrado (actívalo si tu plantilla no tiene la palabra COMPETIDOR)
+TEXTO_ROL_DEFAULT = "COMPETIDOR"    # Texto por defecto
+FUENTE_ROL = "Helvetica-Bold"       # Tipografía ("Helvetica-Bold", "Helvetica-BoldOblique", etc.)
+TAMANO_FUENTE_ROL = 10.5            # Tamaño de fuente
+COLOR_ROL = (0.1, 0.1, 0.1)         # Color del texto del rol
+ROLES_PERSONALIZADOS = {            # Diccionario opcional de roles por WCA ID: {"2023ESPI07": "COMPETIDOR", ...}
+    # "2018ABCD01": "ORGANIZADOR",
+    # "2015XYZW02": "DELEGADO WCA",
+}
 
 # Solicitar competition_id al usuario
 print("\n" + "="*50)
@@ -496,6 +512,23 @@ for idx, comp in enumerate(competitors):
         c.drawString(start_x + flag_width + 0.3 * cm, TPL_H - 4.1 * cm, competitor_name)
     else:
         c.drawCentredString(TPL_W / 2, TPL_H - 4.1 * cm, competitor_name)
+
+    # ===== Línea horizontal separadora (Opcional) =====
+    if DIBUJAR_LINEA_SEPARADORA:
+        c.saveState()
+        c.setStrokeColorRGB(*COLOR_LINEA)
+        c.setLineWidth(GROSOR_LINEA)
+        c.line(22, TPL_H - 4.65 * cm, TPL_W - 22, TPL_H - 4.65 * cm)
+        c.restoreState()
+
+    # ===== Texto del Rol del participante (Opcional) =====
+    if DIBUJAR_TEXTO_ROL:
+        c.saveState()
+        c.setFont(FUENTE_ROL, TAMANO_FUENTE_ROL)
+        c.setFillColorRGB(*COLOR_ROL)
+        rol_text = ROLES_PERSONALIZADOS.get(wid, TEXTO_ROL_DEFAULT)
+        c.drawCentredString(TPL_W / 2, TPL_H - 4.98 * cm, rol_text)
+        c.restoreState()
 
     # ----- Título Records Personales -----
     c.setFont("Helvetica-Bold", 9.5)
