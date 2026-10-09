@@ -59,6 +59,20 @@ from reportlab.pdfgen import canvas
 from reportlab.lib.units import cm
 from PyPDF2 import PdfReader, PdfWriter
 import fitz  # pymupdf
+from reportlab.pdfbase import pdfmetrics
+from reportlab.pdfbase.ttfonts import TTFont
+
+# Registro automático de fuentes estilizadas para roles
+FUENTE_ROL_REGISTRADA = "Helvetica-Bold"
+for font_path in ["C:/Windows/Fonts/impact.ttf", "C:/Windows/Fonts/trebucbd.ttf", "/Library/Fonts/Impact.ttf", "/usr/share/fonts/truetype/msttcorefonts/Impact.ttf"]:
+    if os.path.exists(font_path):
+        try:
+            fname = "Impact" if "impact" in font_path.lower() else "Trebuchet-Bold"
+            pdfmetrics.registerFont(TTFont(fname, font_path))
+            FUENTE_ROL_REGISTRADA = fname
+            break
+        except Exception:
+            pass
 
 # ---------- Config ----------
 TEMPLATE = "Plantilla Gafete.pdf"               # asegúrate de subirla
@@ -80,8 +94,8 @@ GROSOR_LINEA = 1.0                  # Grosor de la línea en puntos (pt)
 # 3. Texto del Rol (ej. COMPETIDOR, ORGANIZADOR, DELEGADO)
 DIBUJAR_TEXTO_ROL = True            # True: dibuja el rol centrado debajo de la línea
 TEXTO_ROL_DEFAULT = "COMPETIDOR"    # Texto por defecto
-FUENTE_ROL = "Helvetica-BoldOblique"# Tipografía ("Helvetica-BoldOblique", "Helvetica-Bold", etc.)
-TAMANO_FUENTE_ROL = 10.5            # Tamaño de fuente
+FUENTE_ROL = FUENTE_ROL_REGISTRADA  # Tipografía estilizada ("Impact", "Trebuchet-Bold", "Helvetica-Bold")
+TAMANO_FUENTE_ROL = 11.5            # Tamaño de fuente del rol
 COLOR_ROL = (0.08, 0.08, 0.08)      # Color del texto del rol
 ROLES_PERSONALIZADOS = {            # Diccionario opcional de roles por WCA ID: {"2023ESPI07": "COMPETIDOR", ...}
     # "2018ABCD01": "ORGANIZADOR",
@@ -481,16 +495,16 @@ for idx, comp in enumerate(competitors):
             stroke_flag = 0
         
         box_x = 12
-        box_y = 26
+        box_y = 18
         box_w = TPL_W - 24
-        box_h = 118
+        box_h = 114
         c.roundRect(box_x, box_y, box_w, box_h, RADIO_ESQUINAS, fill=1, stroke=stroke_flag)
         c.restoreState()
 
     # ======================
     # Ajustes de posiciones
     # ======================
-    box_top = TPL_H - 5.38 * cm
+    box_top = 18 + 114 - 13.0  # Posición del título dentro del recuadro bajado
 
     # ===== Nombre del competidor (con ajuste automático de tamaño para nombres largos) =====
     name_font_size = 12.0
@@ -518,7 +532,7 @@ for idx, comp in enumerate(competitors):
         c.saveState()
         c.setStrokeColorRGB(*COLOR_LINEA)
         c.setLineWidth(GROSOR_LINEA)
-        c.line(22, TPL_H - 4.58 * cm, TPL_W - 22, TPL_H - 4.58 * cm)
+        c.line(22, TPL_H - 4.52 * cm, TPL_W - 22, TPL_H - 4.52 * cm)
         c.restoreState()
 
     # ===== Texto del Rol del participante (Opcional) =====
@@ -527,7 +541,7 @@ for idx, comp in enumerate(competitors):
         c.setFont(FUENTE_ROL, TAMANO_FUENTE_ROL)
         c.setFillColorRGB(*COLOR_ROL)
         rol_text = ROLES_PERSONALIZADOS.get(wid, TEXTO_ROL_DEFAULT)
-        c.drawCentredString(TPL_W / 2, TPL_H - 4.96 * cm, rol_text)
+        c.drawCentredString(TPL_W / 2, TPL_H - 4.88 * cm, rol_text)
         c.restoreState()
 
     # ----- Título Records Personales -----
